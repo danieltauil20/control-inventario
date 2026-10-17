@@ -1,62 +1,73 @@
-import axios from 'axios';
-// 👇 Añade "type" aquí para que TypeScript esté contento con la regla
 import type { Product, Category, StockMovement } from '../types';
 
-const api = axios.create({
-  baseURL: 'http://localhost:5000',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+const API_URL = 'http://localhost:5000/api';
 
 export const getProducts = async (): Promise<Product[]> => {
-  const response = await api.get('/api/products');
-  return response.data;
+  const response = await fetch(`${API_URL}/products`);
+  if (!response.ok) throw new Error('Error al obtener los productos');
+  return response.json();
 };
 
 export const getCategories = async (): Promise<Category[]> => {
-  const response = await api.get('/api/categories');
-  return response.data;
+  const response = await fetch(`${API_URL}/categories`);
+  if (!response.ok) throw new Error('Error al obtener las categorías');
+  return response.json();
 };
 
-export const getMovements = async (): Promise<StockMovement[]> => {
-  const response = await api.get('/api/movement'); // O /api/movements según tu ruta en Flask
-  return response.data;
+export const createCategory = async (categoryData: { name: string; description?: string }) => {
+  const response = await fetch(`${API_URL}/categories`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(categoryData),
+  });
+  if (!response.ok) throw new Error('Error al crear la categoría');
+  return response.json();
 };
 
+export const createProduct = async (productData: Partial<Product>): Promise<Product> => {
+  const response = await fetch(`${API_URL}/products`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(productData),
+  });
+  if (!response.ok) throw new Error('Error al crear el producto');
+  return response.json();
+};
 
-// Registra una entrada o salida de stock en Flask
+export const updateProduct = async (productId: number, productData: Partial<Product>): Promise<Product> => {
+  const response = await fetch(`${API_URL}/products/${productId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(productData),
+  });
+  if (!response.ok) throw new Error('Error al actualizar el producto');
+  return response.json();
+};
+
+export const deleteProduct = async (productId: number): Promise<void> => {
+  const response = await fetch(`${API_URL}/products/${productId}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) throw new Error('Error al eliminar el producto');
+};
+
 export const createMovement = async (movementData: {
   product_id: number;
   movement_type: 'IN' | 'OUT';
   quantity: number;
-  notes?: string;
-}): Promise<StockMovement> => {
-  const response = await api.post('/api/movements', movementData);
-  return response.data;
+  notes: string;
+}) => {
+  const response = await fetch(`${API_URL}/movements`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(movementData),
+  });
+  if (!response.ok) throw new Error('Error al registrar el movimiento');
+  return response.json();
 };
 
-
-export const createProduct = async (productData: Partial<Product>): Promise<Product> => {
-  const response = await api.post('/api/products', productData);
-  return response.data;
+export const getMovements = async (): Promise<StockMovement[]> => {
+  const response = await fetch(`${API_URL}/movements`);
+  if (!response.ok) throw new Error('Error al obtener los movimientos');
+  return response.json();
 };
-
-// Actualizar un producto existente
-export const updateProduct = async (id: number, productData: Partial<Product>): Promise<Product> => {
-  const response = await api.put(`/api/products/${id}`, productData);
-  return response.data;
-};
-
-// Eliminar un producto
-export const deleteProduct = async (id: number): Promise<void> => {
-  await api.delete(`/api/products/${id}`);
-};
-
-// Crear una nueva categoría
-export const createCategory = async (categoryData: { name: string; description?: string }): Promise<Category> => {
-  const response = await api.post('/api/categories', categoryData);
-  return response.data;
-};
-
-export default api;

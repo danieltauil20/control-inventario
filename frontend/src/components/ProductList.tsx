@@ -6,9 +6,12 @@ import type { Product, Category } from '../types';
 import { StockModal } from './StockModal';
 import { AddProductModal } from './AddProductModal';
 import { EditProductModal } from './EditProductModal';
+import { MovementHistory } from './MovementHistory';
+import './ProductList.css';
 
 export const ProductList = () => {
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState<boolean>(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -16,6 +19,8 @@ export const ProductList = () => {
 
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<number | 'ALL'>('ALL');
+  const [onlyLowStock, setOnlyLowStock] = useState<boolean>(false);
+  const [sortBy, setSortBy] = useState<string>('name-asc');
 
   const [selectedProductForStock, setSelectedProductForStock] = useState<Product | null>(null);
   const [selectedProductForEdit, setSelectedProductForEdit] = useState<Product | null>(null);
@@ -88,78 +93,116 @@ export const ProductList = () => {
   const lowStockCount = products.filter(p => p.current_stock <= p.min_stock_alert).length;
   const totalInventoryValue = products.reduce((acc, p) => acc + (p.current_stock * p.unit_price), 0);
 
+  // Filtrado y Ordenamiento
   const filteredProducts = products.filter((product) => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) || product.sku.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'ALL' || product.category_id === selectedCategory;
-    return matchesSearch && matchesCategory;
+    const matchesLowStock = !onlyLowStock || (product.current_stock <= product.min_stock_alert);
+    return matchesSearch && matchesCategory && matchesLowStock;
+  }).sort((a, b) => {
+    if (sortBy === 'name-asc') return a.name.localeCompare(b.name);
+    if (sortBy === 'name-desc') return b.name.localeCompare(a.name);
+    if (sortBy === 'price-asc') return a.unit_price - b.unit_price;
+    if (sortBy === 'price-desc') return b.unit_price - a.unit_price;
+    if (sortBy === 'stock-asc') return a.current_stock - b.current_stock;
+    if (sortBy === 'stock-desc') return b.current_stock - a.current_stock;
+    return 0;
   });
 
-  if (loading) return <div style={{ padding: '20px', textAlign: 'center' }}>Cargando inventario... 🦷</div>;
-  if (error) return <div style={{ padding: '20px', color: 'red', textAlign: 'center' }}>{error}</div>;
+  if (loading) return <div className="loading-state">Cargando inventario... 📦</div>;
+  if (error) return <div className="error-state">{error}</div>;
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="inventory-container">
 
-      {/* DASHBOARD DE MÉTRICAS */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <div style={{ backgroundColor: 'white', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-          <span style={{ fontSize: '13px', color: '#718096', fontWeight: 'bold' }}>📦 Total Productos</span>
-          <h3 style={{ fontSize: '24px', margin: '8px 0 0 0', color: '#2d3748' }}>{totalProducts}</h3>
+      {/* DASHBOARD DE MÉTRICAS INTERACTIVO */}
+      <div className="dashboard-grid">
+        <div className="dashboard-card">
+          <span className="card-label" style={{ color: '#718096' }}>📦 Total Productos</span>
+          <h3 className="card-value" style={{ color: '#2d3748' }}>{totalProducts}</h3>
         </div>
-        <div style={{ backgroundColor: 'white', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-          <span style={{ fontSize: '13px', color: '#e53e3e', fontWeight: 'bold' }}>⚠️ Stock Crítico / Bajo</span>
-          <h3 style={{ fontSize: '24px', margin: '8px 0 0 0', color: '#e53e3e' }}>{lowStockCount}</h3>
+
+        {/* Tarjeta de Stock Crítico clicable */}
+        <div
+          onClick={() => setOnlyLowStock(!onlyLowStock)}
+          title="Haz clic para filtrar productos con stock bajo o crítico"
+          className={`dashboard-card-clickable ${onlyLowStock ? 'active' : ''}`}
+        >
+          <span className="card-label" style={{ color: '#e53e3e' }}>
+            ⚠️ Stock Crítico / Bajo {onlyLowStock && '(Filtrando 🔍)'}
+          </span>
+          <h3 className="card-value" style={{ color: '#e53e3e' }}>{lowStockCount}</h3>
         </div>
-        <div style={{ backgroundColor: 'white', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-          <span style={{ fontSize: '13px', color: '#319795', fontWeight: 'bold' }}>💰 Valor del Inventario</span>
-          <h3 style={{ fontSize: '24px', margin: '8px 0 0 0', color: '#319795' }}>${totalInventoryValue.toFixed(2)}</h3>
+
+        <div className="dashboard-card">
+          <span className="card-label" style={{ color: '#319795' }}>💰 Valor del Inventario</span>
+          <h3 className="card-value" style={{ color: '#319795' }}>${totalInventoryValue.toFixed(2)}</h3>
         </div>
       </div>
 
       {/* BARRA DE ACCIONES Y FILTROS */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '16px' }}>
-        <h2 style={{ margin: 0, color: '#2d3748' }}>Catálogo de Insumos</h2>
+      <div className="actions-bar">
+        <h2 className="actions-title">Catálogo de Insumos</h2>
 
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', width: '100%', maxWidth: '750px', justifyContent: 'flex-end', alignItems: 'center' }}>
+        <div className="filters-group">
           <input
             type="text"
             placeholder="Buscar por nombre o SKU..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            style={{ flex: 1, minWidth: '180px', padding: '10px 14px', borderRadius: '6px', border: '1px solid #cbd5e0', fontSize: '14px', outline: 'none' }}
+            className="filter-input"
           />
 
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
-            style={{ padding: '10px 14px', borderRadius: '6px', border: '1px solid #cbd5e0', fontSize: '14px', backgroundColor: 'white', cursor: 'pointer' }}
+            className="filter-select"
           >
             <option value="ALL">Todas las categorías</option>
             {categories.map((cat) => (<option key={cat.id} value={cat.id}>{cat.name}</option>))}
           </select>
 
-          {/* Botón para abrir el modal de Gestión de Categorías */}
+          {/* Selector de Ordenamiento */}
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="filter-select"
+          >
+            <option value="name-asc">Nombre (A - Z)</option>
+            <option value="name-desc">Nombre (Z - A)</option>
+            <option value="price-asc">Precio: Menor a Mayor</option>
+            <option value="price-desc">Precio: Mayor a Menor</option>
+            <option value="stock-asc">Stock: Menor a Mayor</option>
+            <option value="stock-desc">Stock: Mayor a Menor</option>
+          </select>
+
+          {/* Botón de Historial de Movimientos */}
+          <button
+            onClick={() => setIsHistoryOpen(true)}
+            className="btn-secondary"
+            title="Ver Historial de Movimientos"
+          >
+            📜 Historial
+          </button>
+
           <button
             onClick={() => setIsCategoryModalOpen(true)}
             title="Gestionar Categorías"
-            style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e0', backgroundColor: '#ffffff', color: '#2d3748', cursor: 'pointer' }}
+            className="btn-icon"
           >
             🏷️
           </button>
 
           <button
             onClick={() => exportProductsToCSV(filteredProducts)}
-            style={{
-              padding: '10px 16px', borderRadius: '6px', border: '1px solid #cbd5e0',
-              backgroundColor: '#ffffff', color: '#2d3748', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer', whiteSpace: 'nowrap'
-            }}
+            className="btn-secondary"
           >
             📄 Exportar CSV
           </button>
 
           <button
             onClick={() => setIsAddModalOpen(true)}
-            style={{ padding: '10px 16px', borderRadius: '6px', border: 'none', backgroundColor: '#319795', color: 'white', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            className="btn-primary"
           >
             ➕ Nuevo Producto
           </button>
@@ -167,49 +210,42 @@ export const ProductList = () => {
       </div>
 
       {/* CUADRÍCULA DE PRODUCTOS */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+      <div className="products-grid">
         {filteredProducts.map((product) => (
-          <div key={product.id} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', backgroundColor: '#fff', position: 'relative' }}>
+          <div key={product.id} className="product-card">
 
-            {/* Botones de Editar y Eliminar flotantes en la esquina */}
-            <div style={{ position: 'absolute', top: '12px', right: '12px', display: 'flex', gap: '6px' }}>
+            {/* Botones de Editar y Eliminar flotantes */}
+            <div className="product-actions">
               <button
                 onClick={() => setSelectedProductForEdit(product)}
                 title="Editar producto"
-                style={{ background: '#edf2f7', border: '1px solid #cbd5e0', borderRadius: '4px', cursor: 'pointer', padding: '4px 8px', fontSize: '12px' }}
+                className="btn-edit"
               >
                 ✏️
               </button>
               <button
                 onClick={() => handleDeleteProduct(product.id, product.name)}
                 title="Eliminar producto"
-                style={{ background: '#fed7d7', border: '1px solid #feb2b2', borderRadius: '4px', cursor: 'pointer', padding: '4px 8px', fontSize: '12px' }}
+                className="btn-delete"
               >
                 🗑️
               </button>
             </div>
 
-            <span style={{ fontSize: '11px', color: '#718096', textTransform: 'uppercase', fontWeight: 'bold' }}>{product.brand || 'Genérico'}</span>
-            <h3 style={{ fontSize: '16px', margin: '4px 0 6px 0', color: '#2d3748', paddingRight: '50px' }}>{product.name}</h3>
-            <p style={{ fontSize: '13px', color: '#718096', margin: '0 0 12px 0' }}>SKU: {product.sku}</p>
+            <span className="product-brand">{product.brand || 'Genérico'}</span>
+            <h3 className="product-name">{product.name}</h3>
+            <p className="product-sku">SKU: {product.sku}</p>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #edf2f7', paddingTop: '10px', marginBottom: '12px' }}>
-              <span style={{ fontWeight: 'bold', color: '#2b6cb0', fontSize: '16px' }}>${product.unit_price.toFixed(2)}</span>
-              <span style={{
-                padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold',
-                backgroundColor: product.current_stock <= product.min_stock_alert ? '#fed7d7' : '#c6f6d5',
-                color: product.current_stock <= product.min_stock_alert ? '#9b2c2c' : '#22543d'
-              }}>
+            <div className="product-footer">
+              <span className="product-price">${product.unit_price.toFixed(2)}</span>
+              <span className={`stock-badge ${product.current_stock <= product.min_stock_alert ? 'critical' : 'normal'}`}>
                 Stock: {product.current_stock}
               </span>
             </div>
 
             <button
               onClick={() => setSelectedProductForStock(product)}
-              style={{
-                width: '100%', padding: '8px', backgroundColor: '#edf2f7', color: '#2d3748',
-                border: '1px solid #cbd5e0', borderRadius: '6px', fontWeight: '600', fontSize: '13px', cursor: 'pointer'
-              }}
+              className="btn-stock"
             >
               ⚡ Ajustar Stock
             </button>
@@ -232,6 +268,10 @@ export const ProductList = () => {
 
       {isCategoryModalOpen && (
         <CategoryModal categories={categories} onClose={() => setIsCategoryModalOpen(false)} onCategoryAdded={fetchData} />
+      )}
+
+      {isHistoryOpen && (
+        <MovementHistory onClose={() => setIsHistoryOpen(false)} />
       )}
     </div>
   );

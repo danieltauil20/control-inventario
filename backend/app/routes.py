@@ -81,16 +81,23 @@ def handle_products():
 @api_bp.route('/movements', methods=['GET', 'POST'])
 def handle_movements():
     if request.method == 'GET':
-        movements = StockMovement.query.order_by(StockMovement.created_at.desc()).all()
-        return jsonify([{
-            'id': m.id,
-            'product_id': m.product_id,
-            'product_name': m.product.name if m.product else 'Desconocido',
-            'movement_type': m.movement_type,
-            'quantity': m.quantity,
-            'notes': m.notes,
-            'created_at': m.created_at.isoformat() if m.created_at else None
-        } for m in movements]), 200
+        try:
+            movements = StockMovement.query.order_by(StockMovement.timestamp.desc()).all()
+            result = []
+            for m in movements:
+                product = Product.query.get(m.product_id)
+                result.append({
+                    "id": m.id,
+                    "product_name": product.name if product else "Producto Eliminado",
+                    "movement_type": m.movement_type,  # 'IN' o 'OUT'
+                    "quantity": m.quantity,
+                    "notes": m.notes,
+                    "timestamp": m.timestamp.strftime('%Y-%m-%d %H:%M:%S') if m.timestamp else ""
+                })
+            return jsonify(result), 200
+        except Exception as e:
+            print(f"Error al obtener movimientos: {e}")
+            return jsonify({"error": "No se pudieron cargar los movimientos"}), 500
 
     if request.method == 'POST':
         data = request.json
