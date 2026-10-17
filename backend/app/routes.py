@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from app import db
-from app.models import Category, Product
+from app.models import Category, Product, StockMovement
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -60,3 +60,58 @@ def handle_products():
         db.session.add(new_product)
         db.session.commit()
         return jsonify({'message': 'Producto creado con éxito', 'id': new_product.id}), 201
+
+@api_bp.route('/movements', methods=['POST'])
+def create_movement():
+    data = request.json
+    required_fields = ['product_id', 'movement_type', 'quantity']
+    if not data or not all(field in data for field in required_fields):
+        return jsonify({'error': 'Faltan campos obligatorios (product_id, movement_type, quantity)'}), 400
+        
+    product_id = data['product_id']
+    movement_type = data['movement_type'].upper() # 'IN' o 'OUT'
+    quantity = int(data['quantity'])
+    
+    if movement_type not in ['IN', 'OUT']:
+        return jsonify({'error': 'El tipo de movimiento debe ser "IN" (entrada) o "OUT" (salida)'}), 400
+        
+    product = Product.query.get(product_id)
+    if not product:
+        return jsonify({'error': 'Producto no encontrado'}), 404
+        
+    # Actualizar stock actual según el movimiento
+    if movement_type == 'IN':
+        product.current_stock += quantity
+    elif movement_type == 'OUT':
+        if product.current_stock < quantity:
+            return jsonify({'error': 'Stock insuficiente para realizar esta salida'}), 400
+        product.current_stock -= quantity
+        
+    # Registrar el movimiento
+    new_movement = StockMovement(
+        product_id=product_id,
+        movement_type=movement_type,
+        quantity=quantity,
+        notes=data.get('notes', '')
+    )
+    
+    db.session.add(new_movement)
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Movimiento registrado con éxito',
+        'new_stock': product.current_stock
+    }), 201
+
+@api_bp.route('/movements', methods=['GET'])
+def get_movements():
+    movements = StockMovement.query.order_by(StockMovement.created_at.desc()).all()
+    return jsonify([{
+        'id': m.id,
+        'product_id': m.product_id,
+        'product_name': m.product.name,
+        'movement_type': m.movement_type,
+        'quantity': m.quantity,
+        'notes': m.notes,
+        'created_at': m.created_at.isoformat()
+    } for m in movements]), 200
