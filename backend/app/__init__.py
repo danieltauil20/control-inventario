@@ -1,27 +1,24 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from flask_cors import CORS
-from flask_migrate import Migrate
-from config import Config
+from flask_cors import CORS  # 1. Importar flask-cors
 
 db = SQLAlchemy()
-migrate = Migrate()
-    
-def create_app(config_class=Config):
-    app = Flask(__name__)
-    app.config.from_object(config_class)
 
-    # Inicializar extensiones
+def create_app():
+    app = Flask(__name__)
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
     db.init_app(app)
-    migrate.init_app(app, db)
+    
+    # 2. Habilitar CORS para toda la aplicación
     CORS(app)
 
-    @app.route("/")
-    def index():
-        return {"message": "API de Inventario Dental funcionando correctamente 🦷🚀"}
-
-    # Registrar las rutas de la API
-    from app.routes import api_bp
-    app.register_blueprint(api_bp)
+    with app.app_context():
+        from app.models import Category, Supplier, Product, StockMovement
+        db.create_all()
+        from app.routes import seed_initial_data, api_bp
+        seed_initial_data()
+        app.register_blueprint(api_bp)
 
     return app

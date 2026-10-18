@@ -1,4 +1,4 @@
-import type { Product, Category, StockMovement } from '../types';
+import type { Product, Category, StockMovement, Supplier } from '../types';
 
 const API_URL = 'http://localhost:5000/api';
 
@@ -70,4 +70,32 @@ export const getMovements = async (): Promise<StockMovement[]> => {
   const response = await fetch(`${API_URL}/movements`);
   if (!response.ok) throw new Error('Error al obtener los movimientos');
   return response.json();
+};
+
+// Obtener lista de proveedores
+export const getSuppliers = async (): Promise<Supplier[]> => {
+  const response = await fetch(`${API_URL}/suppliers`);
+  if (!response.ok) {
+    throw new Error('Error al obtener proveedores');
+  }
+  return response.json();
+};
+
+// Crear un nuevo proveedor
+export const createSupplier = async (supplierData: Omit<Supplier, 'id'>): Promise<Supplier> => {
+  const response = await fetch(`${API_URL}/suppliers`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(supplierData),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Error al crear el proveedor');
+  }
+
+  const result = await response.json();
+  return result.supplier;
 };

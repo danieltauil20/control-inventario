@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from app import db
-from app.models import Category, Product, StockMovement
+from app.models import Category, Product, StockMovement, Supplier
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -62,10 +62,11 @@ def handle_products():
                 image_url=data.get('image_url', ''),
                 description=data.get('description', ''),
                 category_id=category_id,
+                supplier_id=data.get('supplier_id'),
                 current_stock=int(data.get('current_stock', 0)),
                 min_stock_alert=int(data.get('min_stock_alert', 10)),
                 unit_price=float(data['unit_price']),
-                supplier=data.get('supplier', '')
+                expiration_date=data.get('expiration_date', '')
             )
             db.session.add(new_product)
             db.session.commit()
@@ -73,6 +74,41 @@ def handle_products():
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': 'Error en la base de datos al crear el producto', 'details': str(e)}), 500
+
+
+@api_bp.route('/products/<int:product_id>', methods=['PUT', 'DELETE'])
+def handle_single_product(product_id):
+    product = Product.query.get_or_404(product_id)
+
+    if request.method == 'DELETE':
+        try:
+            db.session.delete(product)
+            db.session.commit()
+            return jsonify({'message': 'Producto eliminado correctamente'}), 200
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': 'Error al eliminar el producto', 'details': str(e)}), 500
+
+    if request.method == 'PUT':
+        data = request.json or {}
+        try:
+            if 'name' in data: product.name = data['name']
+            if 'sku' in data: product.sku = data['sku']
+            if 'brand' in data: product.brand = data['brand']
+            if 'image_url' in data: product.image_url = data['image_url']
+            if 'description' in data: product.description = data['description']
+            if 'category_id' in data: product.category_id = int(data['category_id'])
+            if 'supplier_id' in data: product.supplier_id = data['supplier_id']
+            if 'unit_price' in data: product.unit_price = float(data['unit_price'])
+            if 'current_stock' in data: product.current_stock = int(data['current_stock'])
+            if 'min_stock_alert' in data: product.min_stock_alert = int(data['min_stock_alert'])
+            if 'expiration_date' in data: product.expiration_date = data['expiration_date']
+
+            db.session.commit()
+            return jsonify({'message': 'Producto actualizado con éxito', 'product': product.to_dict()}), 200
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': 'Error al actualizar el producto', 'details': str(e)}), 500
 
 
 # ==========================================
@@ -153,15 +189,49 @@ def handle_movements():
 
 
 # ==========================================
-# 4. FUNCIÓN SEEDER AUTOMÁTICA
+# 4. RUTAS DE PROVEEDORES
+# ==========================================
+@api_bp.route('/suppliers', methods=['GET', 'POST'])
+def handle_suppliers():
+    if request.method == 'GET':
+        suppliers = Supplier.query.all()
+        return jsonify([s.to_dict() for s in suppliers]), 200
+        
+    if request.method == 'POST':
+        data = request.json
+        if not data or not data.get('name'):
+            return jsonify({'error': 'El nombre del proveedor es obligatorio'}), 400
+            
+        if Supplier.query.filter_by(name=data['name']).first():
+            return jsonify({'error': 'Ya existe un proveedor con ese nombre'}), 400
+
+        try:
+            new_supplier = Supplier(
+                name=data['name'],
+                contact_name=data.get('contact_name', ''),
+                phone=data.get('phone', ''),
+                email=data.get('email', ''),
+                address=data.get('address', '')
+            )
+            db.session.add(new_supplier)
+            db.session.commit()
+            return jsonify({'message': 'Proveedor creado con éxito', 'supplier': new_supplier.to_dict()}), 201
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': 'Error al crear el proveedor', 'details': str(e)}), 500
+
+
+# ==========================================
+# 5. FUNCIÓN SEEDER AUTOMÁTICA
 # ==========================================
 def seed_initial_data():
-    """Inserta categorías y productos iniciales si la base de datos está vacía."""
+    """Inserta categorías, proveedores y productos iniciales si la base de datos está vacía."""
     if Category.query.first() is not None:
         return
 
-    print("🌱 Sembrando categorías y productos iniciales...")
+    print("🌱 Sembrando categorías, proveedores y productos iniciales...")
 
+    # Categorías
     cat_descartables = Category(name="Materiales Descartables", description="Guantes, mascarillas, baberos")
     cat_restauracion = Category(name="Restauración y Adhesión", description="Resinas, adhesivos")
     cat_anestesia = Category(name="Anestesia y Agujas", description="Cartuchos y agujas dentales")
@@ -169,6 +239,15 @@ def seed_initial_data():
     db.session.add_all([cat_descartables, cat_restauracion, cat_anestesia])
     db.session.commit()
 
+    # Proveedores iniciales
+    prov_medical = Supplier(name="Medicaline Iberia", contact_name="Carlos Ruiz", phone="+34 600 111 222", email="ventas@medicaline.es")
+    prov_3m = Supplier(name="3M Dental España", contact_name="Ana Gómez", phone="+34 600 333 444", email="pedidos@3mdental.es")
+    prov_inibsa = Supplier(name="Laboratorios Inibsa", contact_name="Javier Soler", phone="+34 600 555 666", email="atencion@inibsa.com")
+
+    db.session.add_all([prov_medical, prov_3m, prov_inibsa])
+    db.session.commit()
+
+    # Productos iniciales
     productos_iniciales = [
         Product(
             sku="DESC-001", 
@@ -177,9 +256,11 @@ def seed_initial_data():
             image_url="",
             description="Talla M, azul, sin polvo", 
             category_id=cat_descartables.id, 
+            supplier_id=prov_medical.id,
             unit_price=9.50, 
             current_stock=40, 
-            min_stock_alert=10
+            min_stock_alert=10,
+            expiration_date="2028-12-31"
         ),
         Product(
             sku="REST-001", 
@@ -188,9 +269,11 @@ def seed_initial_data():
             image_url="",
             description="Jeringa de 4g para restauraciones universales", 
             category_id=cat_restauracion.id, 
+            supplier_id=prov_3m.id,
             unit_price=32.00, 
             current_stock=12, 
-            min_stock_alert=3
+            min_stock_alert=3,
+            expiration_date="2027-06-15"
         ),
         Product(
             sku="ANES-001", 
@@ -199,9 +282,11 @@ def seed_initial_data():
             image_url="",
             description="Caja con 100 cartuchos de vidrio", 
             category_id=cat_anestesia.id, 
+            supplier_id=prov_inibsa.id,
             unit_price=45.00, 
             current_stock=8, 
-            min_stock_alert=2
+            min_stock_alert=2,
+            expiration_date="2026-11-30"
         )
     ]
 
